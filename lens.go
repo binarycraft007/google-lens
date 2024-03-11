@@ -4,14 +4,24 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"image"
+
+	_ "image/jpeg"
+	_ "image/png"
+
+	_ "golang.org/x/image/bmp"
+	_ "golang.org/x/image/tiff"
+	_ "golang.org/x/image/webp"
+
 	"io"
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -153,34 +163,74 @@ func (l *Lens) Fetch(h *http.Header, opt *FetchOptions) error {
 		}
 		text = string(body)
 	}
-	fmt.Println(text)
 
-	//re := regexp.MustCompile(`AF_initDataCallback\((\{.*?\})\)`)
-	//callbacks := re.FindAllString(text, -1)
+	// Compile the regular expression for pattern matching
+	re := regexp.MustCompile(`AF_initDataCallback\(({.*?})\)`)
 
-	//var lensCallback string
-	//for _, c := range callbacks {
-	//	if containsDetectedObject(c) {
-	//		lensCallback = c
-	//		break
-	//	}
-	//}
+	// Find all matches using FindAllStringSubmatch
+	matches := re.FindAllStringSubmatch(text, -1)
 
-	//if lensCallback == "" {
-	//	fmt.Println(callbacks)
-	//	return ErrAFCallbackNotFound
-	//}
+	var lensCallbackData string
+	for _, match := range matches {
+		if match[1] != "" &&
+			strings.Contains(match[1], "DetectedObject") {
+			lensCallbackData = match[1]
+			break
+		}
+	}
 
-	//re = regexp.MustCompile(`AF_initDataCallback\((\{.*?\})\)`)
-	//match := re.FindString(lensCallback)
+	start := strings.Index(lensCallbackData, "data:")
+	end := strings.Index(lensCallbackData, "sideChannel:")
+	tmp := lensCallbackData[start+len("data:") : end]
+	dataRaw := strings.TrimRight(tmp, " ,")
 
-	//fmt.Println(match[1])
+	var data []interface{}
+	err = json.Unmarshal([]byte(dataRaw), &data)
+	if err != nil {
+		return errors.New("Error unmarshaling data")
+	}
+
+	fullTextPart := data[3]
+	language := fullTextPart.([]interface{})[3]
+	segments := fullTextPart.([]interface{})[4].([]interface{})[0].([]interface{})[0]
+	regionArray := data[2].([]interface{})[3].([]interface{})[0].([]interface{})
+	textSegments := segments.([]interface{})
+
+	var textRegions [][]interface{}
+	for _, x := range regionArray {
+		if val, ok := x.([]interface{}); ok && len(val) > 11 {
+			if str, ok := val[11].(string); ok && strings.HasPrefix(str, "text:") {
+				textRegions = append(textRegions, val[1].([]interface{}))
+			}
+		}
+	}
+
+	for i, segment := range textSegments {
+		fmt.Println(segment, textRegions[i])
+	}
+	fmt.Println("language:", language)
 
 	return nil
 }
 
-func containsDetectedObject(s string) bool {
-	return strings.Contains(s, "DetectedObject")
+func convertToStringSlice(data []interface{}) []string {
+	var stringSlice []string
+	for _, element := range data {
+		if str, ok := element.(string); ok {
+			stringSlice = append(stringSlice, str)
+		}
+	}
+	return stringSlice
+}
+
+func convertToFloatSlice(data []interface{}) []float64 {
+	var stringSlice []float64
+	for _, element := range data {
+		if str, ok := element.(float64); ok {
+			stringSlice = append(stringSlice, str)
+		}
+	}
+	return stringSlice
 }
 
 func imageToFormData(b []byte, bounds image.Rectangle, mime string) (*FetchOptions, error) {
