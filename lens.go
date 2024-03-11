@@ -181,6 +181,10 @@ func (l *Lens) Fetch(h *http.Header, opt *FetchOptions) error {
 
 	start := strings.Index(lensCallbackData, "data:")
 	end := strings.Index(lensCallbackData, "sideChannel:")
+	if start == -1 || end == -1 {
+		return ErrAFCallbackNotFound
+	}
+
 	tmp := lensCallbackData[start+len("data:") : end]
 	dataRaw := strings.TrimRight(tmp, " ,")
 
