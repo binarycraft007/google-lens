@@ -105,7 +105,9 @@ func (l *Lens) Scan(r io.ReadSeeker) (*[]byte, error) {
 		return nil, err
 	}
 	h := l.GenerateHeader()
-	_ = l.Fetch(h, fetchOptions)
+	if err = l.Fetch(h, fetchOptions); err != nil {
+		return nil, err
+	}
 	return &b, nil
 }
 
