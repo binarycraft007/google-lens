@@ -86,7 +86,7 @@ func NewLens(opts ...Option) *Lens {
 
 func (l *Lens) Scan(r io.ReadSeeker) (*LensResult, error) {
 	br := base64.NewDecoder(base64.StdEncoding, r)
-	image, ext, err := image.Decode(br)
+	img, ext, err := image.Decode(br)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +100,7 @@ func (l *Lens) Scan(r io.ReadSeeker) (*LensResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	fetchOptions, err := imageToFormData(b, image.Bounds(), mime)
+	fetchOptions, err := imageToFormData(b, img.Bounds(), mime)
 	if err != nil {
 		return nil, err
 	}

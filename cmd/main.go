@@ -1,7 +1,14 @@
 package main
 
 import (
+	"encoding/base64"
 	"fmt"
+	"image"
+	"image/color"
+
+	"golang.org/x/image/font"
+	"golang.org/x/image/font/basicfont"
+
 	"strings"
 
 	"github.com/binarycraft007/lens"
@@ -12,6 +19,20 @@ func main() {
 	result, err := lensApi.Scan(strings.NewReader(data))
 	if err != nil {
 		panic(err)
+	}
+
+	br := base64.NewDecoder(base64.StdEncoding, strings.NewReader(data))
+	img, _, err := image.Decode(br)
+	if err != nil {
+		panic(err)
+	}
+	_ = img
+	col := color.RGBA{200, 100, 0, 255}
+	d := &font.Drawer{
+		Dst:  img,
+		Src:  image.NewUniform(col),
+		Face: basicfont.Face7x13,
+		Dot:  point,
 	}
 	fmt.Println(*result)
 }
