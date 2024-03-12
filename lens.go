@@ -84,7 +84,7 @@ func NewLens(opts ...Option) *Lens {
 	}
 }
 
-func (l *Lens) Scan(r io.ReadSeeker) (*[]byte, error) {
+func (l *Lens) Scan(r io.ReadSeeker) (*LensResult, error) {
 	br := base64.NewDecoder(base64.StdEncoding, r)
 	image, ext, err := image.Decode(br)
 	if err != nil {
@@ -105,18 +105,25 @@ func (l *Lens) Scan(r io.ReadSeeker) (*[]byte, error) {
 		return nil, err
 	}
 	h := l.GenerateHeader()
-	if err = l.Fetch(h, fetchOptions); err != nil {
+	result, err := l.Fetch(h, fetchOptions)
+	if err != nil {
 		return nil, err
 	}
-	return &b, nil
+	return result, nil
+}
+
+type LensResult struct {
+	Language string
+	Segments []Segment
 }
 
 type FetchOptions struct {
 	formData   *bytes.Buffer
 	contenType *string
+	bounds     image.Rectangle
 }
 
-func (l *Lens) Fetch(h *http.Header, opt *FetchOptions) error {
+func (l *Lens) Fetch(h *http.Header, opt *FetchOptions) (*LensResult, error) {
 	timestamp := fmt.Sprintf("%d", time.Now().UnixMilli())
 	params := url.Values{}
 	params.Add("hl", "en-US")
@@ -130,14 +137,14 @@ func (l *Lens) Fetch(h *http.Header, opt *FetchOptions) error {
 
 	req, err := http.NewRequest("POST", u.String(), opt.formData)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	req.Header = *h
 	req.Header.Set("Content-Type", *opt.contenType)
 	resp, err := l.client.Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
@@ -146,14 +153,14 @@ func (l *Lens) Fetch(h *http.Header, opt *FetchOptions) error {
 		// Create a Gzip reader to decompress the response
 		reader, err := gzip.NewReader(resp.Body)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		defer reader.Close()
 
 		// Read the decompressed data
 		decompressedData, err := io.ReadAll(reader)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		// Process the decompressed data (e.g., print or parse)
@@ -161,7 +168,7 @@ func (l *Lens) Fetch(h *http.Header, opt *FetchOptions) error {
 	} else {
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		text = string(body)
 	}
@@ -181,10 +188,14 @@ func (l *Lens) Fetch(h *http.Header, opt *FetchOptions) error {
 		}
 	}
 
+	if len(lensCallbackData) == 0 {
+		return nil, ErrAFCallbackNotFound
+	}
+
 	start := strings.Index(lensCallbackData, "data:")
 	end := strings.Index(lensCallbackData, "sideChannel:")
 	if start == -1 || end == -1 {
-		return ErrAFCallbackNotFound
+		return nil, ErrAFCallbackNotFound
 	}
 
 	tmp := lensCallbackData[start+len("data:") : end]
@@ -193,7 +204,7 @@ func (l *Lens) Fetch(h *http.Header, opt *FetchOptions) error {
 	var data []interface{}
 	err = json.Unmarshal([]byte(dataRaw), &data)
 	if err != nil {
-		return errors.New("Error unmarshaling data")
+		return nil, errors.New("Error unmarshaling data")
 	}
 
 	fullTextPart := data[3]
@@ -211,12 +222,16 @@ func (l *Lens) Fetch(h *http.Header, opt *FetchOptions) error {
 		}
 	}
 
-	for i, segment := range textSegments {
-		fmt.Println(segment, textRegions[i])
+	result := LensResult{Language: language.(string)}
+	for i, text := range textSegments {
+		segment := NewSegment(text.(string), SegmentOptions{
+			bounds:  opt.bounds,
+			regions: textRegions[i],
+		})
+		result.Segments = append(result.Segments, *segment)
 	}
-	fmt.Println("language:", language)
 
-	return nil
+	return &result, nil
 }
 
 func convertToStringSlice(data []interface{}) []string {
@@ -262,6 +277,7 @@ func imageToFormData(b []byte, bounds image.Rectangle, mime string) (*FetchOptio
 	return &FetchOptions{
 		formData:   formData,
 		contenType: &contenType,
+		bounds:     bounds,
 	}, nil
 }
 

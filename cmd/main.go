@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/binarycraft007/lens"
@@ -8,11 +9,11 @@ import (
 
 func main() {
 	lensApi := lens.NewLens()
-	bytes, err := lensApi.Scan(strings.NewReader(data))
+	result, err := lensApi.Scan(strings.NewReader(data))
 	if err != nil {
 		panic(err)
 	}
-	_ = bytes
+	fmt.Println(*result)
 }
 
 const data = `
