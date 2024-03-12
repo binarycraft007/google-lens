@@ -3,13 +3,14 @@ package lens
 import (
 	"image"
 	"math"
+
+	"golang.org/x/image/math/fixed"
 )
 
 type PixelCoords struct {
-	x      int
-	y      int
-	width  int
-	height int
+	x      fixed.Int26_6
+	y      fixed.Int26_6
+	Bounds fixed.Rectangle26_6
 }
 
 type BoudingBox struct {
@@ -58,9 +59,22 @@ func (box *BoudingBox) toPixelCoords() PixelCoords {
 	x := (box.CenterPerX * imgWidth) - (width / 2)
 	y := (box.CenterPerY * imgHeight) - (height / 2)
 	return PixelCoords{
-		x:      int(math.Round(x)),
-		y:      int(math.Round(y)),
-		width:  int(math.Round(width)),
-		height: int(math.Round(height)),
+		x: float64ToFixed(x),
+		y: float64ToFixed(y),
+		Bounds: fixed.Rectangle26_6{
+			Max: fixed.Point26_6{
+				X: float64ToFixed(width),
+				Y: float64ToFixed(height),
+			},
+			Min: fixed.Point26_6{
+				X: fixed.I(0),
+				Y: fixed.I(0),
+			},
+		},
 	}
+}
+
+func float64ToFixed(value float64) fixed.Int26_6 {
+	fixedValue := fixed.Int26_6(math.Round(value * 64))
+	return fixedValue
 }

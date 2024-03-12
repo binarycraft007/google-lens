@@ -9,7 +9,7 @@ const (
 var SupportedFormats = map[string]string{
 	//"ico":  "image/x-icon",
 	"bmp":  "image/bmp",
-	"jpg":  "image/jpeg",
+	"jpeg": "image/jpeg",
 	"png":  "image/png",
 	"tiff": "image/tiff",
 	"webp": "image/webp",
